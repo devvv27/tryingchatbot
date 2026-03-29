@@ -13,9 +13,15 @@ from db.models import BookingPayload
 
 def rag_tool(query: str, rag_store, llm) -> str:
     """Input: query -> Output: retrieved answer."""
+    if not getattr(rag_store, "is_ready", False):
+        return "Please upload PDF files and click 'Process PDFs' before asking document questions."
+
     results = rag_store.retrieve(query, k=4)
     if not results:
-        return "I could not find relevant information in the uploaded PDFs."
+        return (
+            "I could not find specific details in the uploaded PDFs. "
+            "Try asking a more focused question or re-process the PDFs."
+        )
 
     context = "\n\n".join([f"Chunk {idx + 1}: {r.chunk}" for idx, r in enumerate(results)])
     prompt = (
@@ -24,8 +30,12 @@ def rag_tool(query: str, rag_store, llm) -> str:
         f"Question: {query}\n\n"
         f"Context:\n{context}"
     )
-    response = llm.invoke(prompt)
-    return response.content if hasattr(response, "content") else str(response)
+    try:
+        response = llm.invoke(prompt)
+        return response.content if hasattr(response, "content") else str(response)
+    except Exception:
+        # If model call fails, still return retrieved context so user gets useful output.
+        return "\n\n".join([f"- {r.chunk[:320]}" for r in results])
 
 
 def booking_persistence_tool(payload: Dict) -> Dict:

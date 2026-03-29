@@ -87,6 +87,11 @@ def _chat_page(llm) -> None:
 
     st.divider()
 
+    if st.session_state.rag_store.is_ready:
+        st.caption(f"RAG ready: {st.session_state.rag_store.chunk_count} chunks indexed.")
+    else:
+        st.caption("RAG not ready yet. Upload PDFs and click 'Process PDFs'.")
+
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])

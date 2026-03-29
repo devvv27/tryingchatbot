@@ -43,6 +43,10 @@ class LightweightRAGStore:
 	def is_ready(self) -> bool:
 		return bool(self._chunks) and self._matrix is not None
 
+	@property
+	def chunk_count(self) -> int:
+		return len(self._chunks)
+
 	def build_from_pdf_files(self, uploaded_files: Iterable) -> int:
 		chunks: List[str] = []
 
@@ -74,7 +78,12 @@ class LightweightRAGStore:
 		results: List[RetrievalResult] = []
 		for idx in ranked_indices:
 			score = float(scores[idx])
-			if score <= 0:
-				continue
-			results.append(RetrievalResult(chunk=self._chunks[idx], score=score))
+			if score > 0:
+				results.append(RetrievalResult(chunk=self._chunks[idx], score=score))
+
+		# Fallback for broad queries (e.g., "summarize the PDF") where sparse vectors can score zero.
+		if not results:
+			for idx in ranked_indices:
+				results.append(RetrievalResult(chunk=self._chunks[idx], score=float(scores[idx])))
+
 		return results
