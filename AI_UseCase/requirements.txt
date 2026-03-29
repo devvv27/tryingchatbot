@@ -1,0 +1,8 @@
+streamlit
+langchain
+langchain-groq
+langchain-google-genai
+pypdf
+scikit-learn
+pandas
+requests
