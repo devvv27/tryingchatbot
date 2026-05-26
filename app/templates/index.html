@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Knowledge Assistant</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape bg-one"></div>
+    <div class="bg-shape bg-two"></div>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <h1>Knowledge Hub</h1>
+        <p class="muted">Upload up to 40 resources and select what should ground each answer.</p>
+
+        <section class="card">
+          <h2>Upload File</h2>
+          <input id="fileInput" type="file" accept=".pdf,.docx,.xlsx" />
+          <button id="uploadBtn">Upload</button>
+        </section>
+
+        <section class="card">
+          <h2>Add URL</h2>
+          <input id="urlInput" type="url" placeholder="https://example.com/docs" />
+          <button id="urlBtn">Ingest URL</button>
+        </section>
+
+        <section class="card">
+          <h2>Resources</h2>
+          <div id="docList" class="doc-list"></div>
+        </section>
+      </aside>
+
+      <section class="chat-shell">
+        <header>
+          <h2>Grounded Q&A</h2>
+          <p>Answers are generated only from selected resources with location-aware citations.</p>
+        </header>
+
+        <div id="chatLog" class="chat-log"></div>
+
+        <form id="chatForm" class="chat-form">
+          <textarea id="questionInput" rows="3" placeholder="Ask a question about your selected resources"></textarea>
+          <button type="submit">Ask</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

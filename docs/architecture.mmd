@@ -1,0 +1,14 @@
+flowchart LR
+    A[User Uploads Files or URL] --> B[Ingestion Service]
+    B --> C[Parser Layer\nPDF OCR/Extract\nDOCX Sections\nXLSX Tab/Row\nWeb Section Extract]
+    C --> D[Chunking + Metadata Mapper\n(page/tab-row/section)]
+    D --> E[Embedding Model\nall-MiniLM-L6-v2]
+    E --> M[(SQLite\nDocuments + Chunks + Embeddings + Sessions)]
+
+    U[User Chat UI] --> S[Select/Unselect Resource State]
+    S --> Q[Query API]
+    Q --> G[Retriever\nSQL filter selected docs + cosine search]
+    M --> G
+    G --> H[LLM Orchestrator\nLocal Ollama chat API]
+    H --> I[Citation Engine\nDirect quote + source + location]
+    I --> U
