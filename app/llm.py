@@ -5,6 +5,7 @@ import hashlib
 import os
 from typing import Any
 from urllib.parse import urljoin
+import re
 
 import requests
 
@@ -12,7 +13,7 @@ from app.citation_engine import strict_not_found
 
 
 SYSTEM_PROMPT = """
-You are a grounded enterprise assistant. Rules: 1) Use ONLY the provided context. 2) If the context is insufficient, respond exactly with: NOT_FOUND 3) Do not invent facts. 4) After the answer, include a section titled 'Citations'. 5) Each citation line format: - "<direct quote>" | Source: <document name> | Location: <location> 6) Keep answers concise and avoid repeating long quotes in prose.
+You are a grounded enterprise assistant. Rules: 1) Use ONLY the provided context. 2) If the context is insufficient, respond exactly with: NOT_FOUND 3) Do not invent facts. 4) After the answer, include a section titled 'Citations'. 5) Each citation line format: - "<direct quote>" | Source: <document name> | Location: <location> 6) Always reference the human-readable `Location` provided in the context (e.g., "Page 2", "Section: Introduction", "Tab: Sheet1, Row: 4"). NEVER reference or emit bracketed chunk indexes like "[1]", "[2]", or similar. 7) Prefer `Page N` when available for PDF sources. 8) Keep answers concise and avoid repeating long quotes in prose.
 """.strip()
 
 MAX_CONTEXT_CHUNKS = int(os.getenv("LLM_MAX_CONTEXT_CHUNKS", "3"))
@@ -22,7 +23,7 @@ LLM_CACHE_SIZE = int(os.getenv("LLM_CACHE_SIZE", "128"))
 _LLM_RESPONSE_CACHE: OrderedDict[str, str] = OrderedDict()
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
 OLLAMA_TIMEOUT_SECONDS = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "60"))
 
 
@@ -45,12 +46,16 @@ def _ollama_chat_endpoint() -> str:
 
 def _compact_context(chunks: list[dict[str, Any]]) -> str:
     lines: list[str] = []
-    for idx, chunk in enumerate(chunks[:MAX_CONTEXT_CHUNKS], start=1):
+    # Provide context to the model without numeric chunk indexes. The model
+    # should see only human-readable locations (Page/Section/Tab:Row) and the
+    # quoted text; this reduces the chance it cites chunk numbers instead of
+    # real locations.
+    for chunk in chunks[:MAX_CONTEXT_CHUNKS]:
         quote = (chunk.get("quote_text") or "").strip()
         if len(quote) > MAX_QUOTE_CHARS:
             quote = quote[:MAX_QUOTE_CHARS].rstrip() + "..."
         lines.append(
-            f"[{idx}] Source: {chunk.get('document_name', 'Unknown')} | "
+            f"Source: {chunk.get('document_name', 'Unknown')} | "
             f"Location: {chunk.get('location_value', 'N/A')}\n"
             f"Quote: {quote}"
         )
@@ -132,5 +137,34 @@ def generate_answer(question: str, context_text: str, chunks: list[dict[str, Any
         return strict_not_found()
     if text.strip() == "NOT_FOUND":
         return strict_not_found()
-    _cache_set(key, text)
-    return text
+    # Post-process model citations: the model sometimes references the
+    # context chunk index (e.g. "Location: [5]") instead of the human
+    # readable location (e.g. "Page 2"). Replace occurrences like
+    # "Location: [N]" with the corresponding `location_value` from the
+    # provided `chunks` list so UI shows correct page/section information.
+    def _replace_location(match: re.Match) -> str:
+        try:
+            idx = int(match.group(1))
+            if 1 <= idx <= len(chunks):
+                return f"Location: {chunks[idx - 1].get('location_value', 'N/A')}"
+        except Exception:
+            pass
+        return match.group(0)
+
+    processed = re.sub(r"Location:\s*\[(\d+)\]", _replace_location, text)
+
+    # Also replace occurrences where the model may have used a bracketed
+    # reference directly after a source, e.g. "| [5]" -> "| Location: <...>"
+    def _replace_pipe_bracket(match: re.Match) -> str:
+        try:
+            idx = int(match.group(1))
+            if 1 <= idx <= len(chunks):
+                return f"| Location: {chunks[idx - 1].get('location_value', 'N/A')}"
+        except Exception:
+            pass
+        return match.group(0)
+
+    processed = re.sub(r"\|\s*\[(\d+)\]", _replace_pipe_bracket, processed)
+
+    _cache_set(key, processed)
+    return processed

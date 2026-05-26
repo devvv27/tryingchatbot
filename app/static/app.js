@@ -15,6 +15,23 @@ function addMessage(role, text) {
   chatLogEl.scrollTop = chatLogEl.scrollHeight;
 }
 
+function stripModelCitations(answer) {
+  const marker = "\nCitations:";
+  const idx = answer.indexOf(marker);
+  if (idx === -1) return answer.trim();
+  return answer.slice(0, idx).trim();
+}
+
+function renderCitations(citations) {
+  if (!citations || citations.length === 0) return;
+
+  const lines = ["Citations:"];
+  citations.forEach((citation) => {
+    lines.push(`- "${citation.quote}" | Source: ${citation.source} | Location: ${citation.location}`);
+  });
+  addMessage("assistant", lines.join("\n"));
+}
+
 async function refreshDocuments() {
   await refreshDocumentsWithRetry(2);
 }
@@ -167,7 +184,8 @@ document.getElementById("chatForm").addEventListener("submit", async (e) => {
   }
 
   state.sessionId = data.session_id || state.sessionId;
-  addMessage("assistant", data.answer);
+  addMessage("assistant", stripModelCitations(data.answer));
+  renderCitations(data.citations);
 });
 
 refreshDocuments();

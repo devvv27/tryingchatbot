@@ -227,6 +227,29 @@ class Database:
 
         result: list[dict[str, Any]] = []
         for row in rows:
+            metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+
+            # Compute canonical location_value from metadata when possible to
+            # avoid mismatches between stored location_value and metadata.
+            loc_type = row["location_type"]
+            loc_value = row["location_value"] or ""
+            try:
+                if loc_type == "page" or "page" in metadata:
+                    page = metadata.get("page") or loc_value.replace("Page", "").strip()
+                    loc_value = f"Page {page}"
+                elif loc_type == "tab_row" or metadata.get("sheet"):
+                    sheet = metadata.get("sheet")
+                    r = metadata.get("row")
+                    if sheet and r is not None:
+                        loc_value = f"Tab: {sheet}, Row: {r}"
+                elif loc_type == "section" or metadata.get("section"):
+                    sec = metadata.get("section")
+                    if sec:
+                        loc_value = f"Section: {sec}"
+            except Exception:
+                # Fallback to stored location_value on any error
+                loc_value = row["location_value"]
+
             result.append(
                 {
                     "id": row["id"],
@@ -235,9 +258,9 @@ class Database:
                     "source_type": row["source_type"],
                     "text": row["text"],
                     "quote_text": row["quote_text"],
-                    "location_type": row["location_type"],
-                    "location_value": row["location_value"],
-                    "metadata": json.loads(row["metadata_json"]),
+                    "location_type": loc_type,
+                    "location_value": loc_value,
+                    "metadata": metadata,
                     "embedding": json.loads(row["embedding_json"]),
                 }
             )
@@ -259,6 +282,25 @@ class Database:
 
         result: list[dict[str, Any]] = []
         for row in rows:
+            metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+            loc_type = row["location_type"]
+            loc_value = row["location_value"] or ""
+            try:
+                if loc_type == "page" or "page" in metadata:
+                    page = metadata.get("page") or loc_value.replace("Page", "").strip()
+                    loc_value = f"Page {page}"
+                elif loc_type == "tab_row" or metadata.get("sheet"):
+                    sheet = metadata.get("sheet")
+                    r = metadata.get("row")
+                    if sheet and r is not None:
+                        loc_value = f"Tab: {sheet}, Row: {r}"
+                elif loc_type == "section" or metadata.get("section"):
+                    sec = metadata.get("section")
+                    if sec:
+                        loc_value = f"Section: {sec}"
+            except Exception:
+                loc_value = row["location_value"]
+
             result.append(
                 {
                     "id": row["id"],
@@ -267,9 +309,9 @@ class Database:
                     "source_type": row["source_type"],
                     "text": row["text"],
                     "quote_text": row["quote_text"],
-                    "location_type": row["location_type"],
-                    "location_value": row["location_value"],
-                    "metadata": json.loads(row["metadata_json"]),
+                    "location_type": loc_type,
+                    "location_value": loc_value,
+                    "metadata": metadata,
                     "embedding": json.loads(row["embedding_json"]),
                 }
             )

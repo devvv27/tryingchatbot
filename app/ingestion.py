@@ -11,6 +11,16 @@ from pypdf import PdfReader
 
 from app.config import CHUNK_OVERLAP, CHUNK_SIZE
 
+try:
+    from pdf2image import convert_from_path  # type: ignore
+    import pytesseract  # type: ignore
+
+    _OCR_AVAILABLE = True
+except Exception:
+    convert_from_path = None  # type: ignore[assignment]
+    pytesseract = None  # type: ignore[assignment]
+    _OCR_AVAILABLE = False
+
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
     text = " ".join(text.split())
@@ -28,11 +38,37 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     return chunks
 
 
+def _ocr_pdf_pages(file_path: Path) -> list[str]:
+    if not _OCR_AVAILABLE or convert_from_path is None or pytesseract is None:
+        return []
+
+    try:
+        images = convert_from_path(str(file_path), dpi=200)
+    except Exception:
+        return []
+
+    page_texts: list[str] = []
+    for image in images:
+        try:
+            page_texts.append(pytesseract.image_to_string(image) or "")
+        except Exception:
+            page_texts.append("")
+    return page_texts
+
+
 def parse_pdf(file_path: Path) -> list[dict[str, Any]]:
     reader = PdfReader(str(file_path))
     records: list[dict[str, Any]] = []
+    ocr_texts: list[str] | None = None
+
+    needs_ocr = any(not (page.extract_text() or "").strip() for page in reader.pages)
+    if needs_ocr:
+        ocr_texts = _ocr_pdf_pages(file_path)
+
     for page_idx, page in enumerate(reader.pages, start=1):
         raw = page.extract_text() or ""
+        if not raw.strip() and ocr_texts and len(ocr_texts) >= page_idx:
+            raw = ocr_texts[page_idx - 1]
         for chunk_idx, chunk in enumerate(chunk_text(raw)):
             records.append(
                 {
